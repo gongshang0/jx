@@ -10,32 +10,37 @@ def build_all():
 const WORKER_URL = '""" + CUSTOM_API_DOMAIN + """';
 const API_SECRET = '""" + API_SECRET + """';
 
-// 极致精简的客户端脚本：绝不出错，百分百初始化成功并透传解析
 const CLIENT_SCRIPT = `/**
  * @name MusicDL 自动化源
- * @description 全平台解析音源 (稳定修复版)
- * @version 1.2.0
+ * @description 全平台解析音源 (酷狗/周杰伦算法修复版)
+ * @version 1.3.0
  */
 
 const { EVENT_NAMES, request, on, send } = globalThis.lx;
 
-// 1. 发送初始化成功通知
+// 1. 初始化通知
 send(EVENT_NAMES.inited, {
   status: true,
   openDevTools: false,
   sources: {
-    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
-    kg: { name: '酷狗音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
-    tx: { name: 'QQ音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
-    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
-    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] }
+    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
+    kg: { name: '酷狗音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
+    tx: { name: 'QQ音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
+    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
+    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] }
   }
 });
 
-// 2. 监听请求并透传给后端 Worker
+// 2. 请求转发机制（对酷狗 hash 做特异性处理）
 on(EVENT_NAMES.request, async ({ action, source, musicInfo, quality }) => {
   if (action === 'musicUrl') {
-    const songId = musicInfo.songmid || musicInfo.hash || musicInfo.id || musicInfo.copyrightId;
+    let songId = musicInfo.songmid || musicInfo.id;
+
+    // 针对酷狗源特殊处理：酷狗的核心核心是 hash
+    if (source === 'kg') {
+      songId = musicInfo.hash || musicInfo.sqHash || musicInfo.hqHash || musicInfo.songmid || musicInfo.id;
+    }
+
     const apiUrl = WORKER_URL + '/parse?source=' + source + '&id=' + encodeURIComponent(songId) + '&quality=' + quality + '&secret=' + '""" + API_SECRET + """';
 
     try {
@@ -67,14 +72,12 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // 提供 JS 脚本服务
     if (url.pathname === '/lx-source.js') {
       return new Response(CLIENT_SCRIPT, {
         headers: { ...corsHeaders, 'Content-Type': 'application/javascript; charset=utf-8' }
       });
     }
 
-    // 解析音源接口
     if (url.pathname === '/parse') {
       const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' };
 
@@ -84,11 +87,11 @@ export default {
       const secret = url.searchParams.get('secret');
 
       if (secret !== API_SECRET) {
-        return new Response(JSON.stringify({ code: 403, msg: '密钥不匹配，拒绝访问' }), { status: 403, headers: jsonHeaders });
+        return new Response(JSON.stringify({ code: 403, msg: '密钥不匹配' }), { status: 403, headers: jsonHeaders });
       }
 
       if (!source || !songmid) {
-        return new Response(JSON.stringify({ code: 400, msg: '缺少必备参数' }), { status: 400, headers: jsonHeaders });
+        return new Response(JSON.stringify({ code: 400, msg: '缺少参数' }), { status: 400, headers: jsonHeaders });
       }
 
       try {
@@ -103,31 +106,38 @@ export default {
   }
 };
 
-// 后端多重备用链接智能解析引擎
 async function getRealPlayUrl(source, id, quality) {
-  // 渠道 1：免费公用解析 API
+  // 渠道 1：专治周杰伦及无损版权的聚合接口
+  try {
+    const res = await fetch(`https://api.ikunshare.com/api/music?source=${source}&id=${id}&quality=${quality}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+    const data = await res.json();
+    if (data && data.url && data.url.startsWith('http')) return data.url;
+    if (data && data.data && typeof data.data === 'string' && data.data.startsWith('http')) return data.data;
+  } catch (e) {}
+
+  // 渠道 2：全网兼容接口
   try {
     const res = await fetch(`https://api.vkey.lgqy.hn.cn/api/music?source=${source}&id=${id}&quality=${quality}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
     const data = await res.json();
-    if (data && data.url && data.url.startsWith('http')) {
-      return data.url;
-    }
+    if (data && data.url && data.url.startsWith('http')) return data.url;
   } catch (e) {}
 
-  // 渠道 2：咪咕直连接口
-  if (source === 'mg') {
+  // 渠道 3：酷狗专项 Hash 直连解析
+  if (source === 'kg') {
     try {
-      const res = await fetch(`https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=${id}&contenttype=1`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)', 'channel': '0146951' }
+      const res = await fetch(`https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=${id}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)' }
       });
       const data = await res.json();
-      if (data?.info?.url) return data.info.url;
+      if (data && data.url) return data.url;
     } catch (e) {}
   }
 
-  // 渠道 3：酷我直连接口
+  // 渠道 4：酷我直连
   if (source === 'kw') {
     try {
       const res = await fetch(`https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${id}&format=mp3&response=url`, {
@@ -138,18 +148,7 @@ async function getRealPlayUrl(source, id, quality) {
     } catch (e) {}
   }
 
-  // 渠道 4：网易云直连接口
-  if (source === 'wy') {
-    try {
-      const res = await fetch(`https://music.163.com/api/song/enhance/player/url?ids=[${id}]&br=320000`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://music.163.com/' }
-      });
-      const data = await res.json();
-      if (data?.data?.[0]?.url) return data.data[0].url.replace('http://', 'https://');
-    } catch (e) {}
-  }
-
-  throw new Error('所有线路解析失败，该歌曲可能受版权保护');
+  throw new Error('该歌曲所有解析接口均未返回有效地址');
 }
 """
 

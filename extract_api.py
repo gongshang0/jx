@@ -3,10 +3,9 @@ import os
 def build_all():
     print(">>> 正在生成配置与部署文件...")
 
-    # 你的自定义 API 域名
     CUSTOM_API_DOMAIN = "https://lx.gongshangss.dpdns.org"
 
-    # 生成部署在 Cloudflare Worker 的全套后端服务（API + lx-source.js 托管）
+    # 生成安全的 JS 代码字符串，避免任何 `${}` 引起的解析问题
     worker_code = """
 const WORKER_URL = '""" + CUSTOM_API_DOMAIN + """';
 
@@ -21,7 +20,7 @@ const { EVENT_NAMES, request, on } = globalThis.lx;
 on(EVENT_NAMES.request, async ({ action, source, musicInfo, quality }) => {
   if (action === 'musicUrl') {
     const songId = musicInfo.songmid || musicInfo.id;
-    const apiUrl = '${WORKER_URL}/?source=${source}&id=${songId}&quality=${quality}';
+    const apiUrl = WORKER_URL + '/?source=' + source + '&id=' + songId + '&quality=' + quality;
 
     try {
       const res = await request(apiUrl, { method: 'GET', timeout: 8000 });
@@ -39,7 +38,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. 访问 /lx-source.js 返回客户端配置文件
+    // 1. 访问 /lx-source.js 返回在线导入所需的客户端脚本
     if (url.pathname === '/lx-source.js') {
       return new Response(CLIENT_SCRIPT, {
         headers: {
@@ -49,7 +48,7 @@ export default {
       });
     }
 
-    // 2. 音乐解析 API 接口
+    // 2. 音乐解析后端 API
     const source = url.searchParams.get('source');
     const songmid = url.searchParams.get('id');
     const quality = url.searchParams.get('quality') || '128k';
@@ -79,7 +78,7 @@ export default {
 };
 
 async function parseKuwo(rid, quality) {
-  const reqUrl = `https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${rid}&format=mp3&response=url`;
+  const reqUrl = 'https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=' + rid + '&format=mp3&response=url';
   const res = await fetch(reqUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
   const text = await res.text();
   if (text && text.startsWith('http')) return text;
@@ -87,7 +86,7 @@ async function parseKuwo(rid, quality) {
 }
 
 async function parseNetease(id, quality) {
-  const reqUrl = `https://music.163.com/api/song/enhance/player/url?ids=[${id}]&br=320000`;
+  const reqUrl = 'https://music.163.com/api/song/enhance/player/url?ids=[' + id + ']&br=320000';
   const res = await fetch(reqUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://music.163.com/' } });
   const data = await res.json();
   if (data?.data?.[0]?.url) return data.data[0].url.replace('http://', 'https://');
@@ -95,7 +94,7 @@ async function parseNetease(id, quality) {
 }
 
 async function parseMigu(copyrightId, quality) {
-  const reqUrl = `https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=${copyrightId}&contenttype=1`;
+  const reqUrl = 'https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=' + copyrightId + '&contenttype=1';
   const res = await fetch(reqUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)', 'channel': '0146951' } });
   const data = await res.json();
   if (data?.info?.url) return data.info.url;

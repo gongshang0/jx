@@ -5,7 +5,6 @@ def build_all():
 
     CUSTOM_API_DOMAIN = "https://lx.gongshangss.dpdns.org"
 
-    # 生成安全的 JS 代码字符串，避免任何 `${}` 引起的解析问题
     worker_code = """
 const WORKER_URL = '""" + CUSTOM_API_DOMAIN + """';
 
@@ -17,6 +16,12 @@ const CLIENT_SCRIPT = `/**
 
 const { EVENT_NAMES, request, on } = globalThis.lx;
 
+// 1. 响应初始化事件（关键：解决一直显示“初始化中”的问题）
+on(EVENT_NAMES.inited, ({ status, openDevTools }) => {
+  console.log('MusicDL 自定义源初始化成功！');
+});
+
+// 2. 响应音乐 URL 请求
 on(EVENT_NAMES.request, async ({ action, source, musicInfo, quality }) => {
   if (action === 'musicUrl') {
     const songId = musicInfo.songmid || musicInfo.id;
@@ -38,29 +43,41 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. 访问 /lx-source.js 返回在线导入所需的客户端脚本
+    // 跨域头配置
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
+      'Content-Type': 'application/javascript; charset=utf-8'
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    // 1. 返回客户端源脚本
     if (url.pathname === '/lx-source.js') {
       return new Response(CLIENT_SCRIPT, {
         headers: {
-          'Content-Type': 'application/javascript; charset=utf-8',
-          'Access-Control-Allow-Origin': '*'
+          ...corsHeaders,
+          'Content-Type': 'application/javascript; charset=utf-8'
         }
       });
     }
 
-    // 2. 音乐解析后端 API
+    // 2. 后端 API 解析
     const source = url.searchParams.get('source');
     const songmid = url.searchParams.get('id');
     const quality = url.searchParams.get('quality') || '128k';
 
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    const jsonHeaders = {
+      ...corsHeaders,
       'Content-Type': 'application/json; charset=utf-8'
     };
 
-    if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-    if (!source || !songmid) return new Response(JSON.stringify({ code: 400, msg: 'Missing source or id' }), { status: 400, headers: corsHeaders });
+    if (!source || !songmid) {
+      return new Response(JSON.stringify({ code: 400, msg: 'Missing source or id' }), { status: 400, headers: jsonHeaders });
+    }
 
     try {
       let musicUrl = '';
@@ -68,11 +85,11 @@ export default {
         case 'kw': musicUrl = await parseKuwo(songmid, quality); break;
         case 'wy': musicUrl = await parseNetease(songmid, quality); break;
         case 'mg': musicUrl = await parseMigu(songmid, quality); break;
-        default: return new Response(JSON.stringify({ code: 400, msg: 'Unsupported source' }), { status: 400, headers: corsHeaders });
+        default: return new Response(JSON.stringify({ code: 400, msg: 'Unsupported source' }), { status: 400, headers: jsonHeaders });
       }
-      return new Response(JSON.stringify({ code: 0, url: musicUrl }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ code: 0, url: musicUrl }), { headers: jsonHeaders });
     } catch (err) {
-      return new Response(JSON.stringify({ code: 500, msg: err.message }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ code: 500, msg: err.message }), { status: 500, headers: jsonHeaders });
     }
   }
 };

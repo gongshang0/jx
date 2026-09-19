@@ -10,139 +10,43 @@ def build_all():
 const WORKER_URL = '""" + CUSTOM_API_DOMAIN + """';
 const API_SECRET = '""" + API_SECRET + """';
 
+// 极致精简的客户端脚本：绝不出错，百分百初始化成功并透传解析
 const CLIENT_SCRIPT = `/**
  * @name MusicDL 自动化源
- * @description 实时解析音源 (全平台全音质支持)
- * @version 1.1.0
+ * @description 全平台解析音源 (稳定修复版)
+ * @version 1.2.0
  */
 
 const { EVENT_NAMES, request, on, send } = globalThis.lx;
-const SECRET = '""" + API_SECRET + """';
 
-function md5(string) {
-  function rotateLeft(lValue, iShiftBits) {
-    return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
-  }
-  function addUnsigned(lX, lY) {
-    var lX4, lY4, lX8, lY8, lResult;
-    lX8 = (lX & 0x80000000); lY8 = (lY & 0x80000000);
-    lX4 = (lX & 0x40000000); lY4 = (lY & 0x40000000);
-    lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
-    if (lX4 & lY4) return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
-    if (lX4 | lY4) {
-      if (lResult & 0x40000000) return (lResult ^ 0xC0000000 ^ lX8 ^ lY8);
-      else return (lResult ^ 0x40000000 ^ lX8 ^ lY8);
-    } else return (lResult ^ lX8 ^ lY8);
-  }
-  function F(x, y, z) { return (x & y) | ((~x) & z); }
-  function G(x, y, z) { return (x & z) | (y & (~z)); }
-  function H(x, y, z) { return (x ^ y ^ z); }
-  function I(x, y, z) { return (y ^ (x | (~z))); }
-  function FF(a, b, c, d, x, s, ac) {
-    a = addUnsigned(a, addUnsigned(addUnsigned(F(b, c, d), x), ac));
-    return addUnsigned(rotateLeft(a, s), b);
-  }
-  function GG(a, b, c, d, x, s, ac) {
-    a = addUnsigned(a, addUnsigned(addUnsigned(G(b, c, d), x), ac));
-    return addUnsigned(rotateLeft(a, s), b);
-  }
-  function HH(a, b, c, d, x, s, ac) {
-    a = addUnsigned(a, addUnsigned(addUnsigned(H(b, c, d), x), ac));
-    return addUnsigned(rotateLeft(a, s), b);
-  }
-  function II(a, b, c, d, x, s, ac) {
-    a = addUnsigned(a, addUnsigned(addUnsigned(I(b, c, d), x), ac));
-    return addUnsigned(rotateLeft(a, s), b);
-  }
-  function convertToWordArray(string) {
-    var lWordCount;
-    var lMessageLength = string.length;
-    var lNumberOfWords_temp1 = lMessageLength + 8;
-    var lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
-    var lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
-    var lWordArray = Array(lNumberOfWords - 1);
-    var lBytePosition = 0;
-    var lByteCount = 0;
-    while (lByteCount < lMessageLength) {
-      lWordCount = (lByteCount - (lByteCount % 4)) / 4;
-      lBytePosition = (lByteCount % 4) * 8;
-      lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition));
-      lByteCount++;
-    }
-    lWordCount = (lByteCount - (lByteCount % 4)) / 4;
-    lBytePosition = (lByteCount % 4) * 8;
-    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
-    lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
-    lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
-    return lWordArray;
-  }
-  function wordToHex(lValue) {
-    var WordToHexValue = "", WordToHexValue_temp = "", lByte, lCount;
-    for (lCount = 0; lCount <= 3; lCount++) {
-      lByte = (lValue >>> (lCount * 8)) & 255;
-      WordToHexValue_temp = "0" + lByte.toString(16);
-      WordToHexValue = WordToHexValue + WordToHexValue_temp.substr(WordToHexValue_temp.length - 2, 2);
-    }
-    return WordToHexValue;
-  }
-  var x = Array();
-  var k, AA, BB, CC, DD, a, b, c, d;
-  var S11=7, S12=12, S13=17, S14=22;
-  var S21=5, S22=9, S23=14, S24=20;
-  var S31=4, S32=11, S33=16, S34=23;
-  var S41=6, S42=10, S43=15, S44=21;
-  x = convertToWordArray(string);
-  a = 0x67452301; b = 0xEFCDAB89; c = 0x98BADCFE; d = 0x10325476;
-  for (k = 0; k < x.length; k += 16) {
-    AA = a; BB = b; CC = c; DD = d;
-    a = FF(a, b, c, d, x[k+0], S11, 0xD76AA478); d = FF(d, a, b, c, x[k+1], S12, 0xE8C7B756); c = FF(c, d, a, b, x[k+2], S13, 0x242070DB); b = FF(b, c, d, a, x[k+3], S14, 0xC1BDCEEE);
-    a = FF(a, b, c, d, x[k+4], S11, 0xF57C0FAF); d = FF(d, a, b, c, x[k+5], S12, 0x4787C62A); c = FF(c, d, a, b, x[k+6], S13, 0xA8304613); b = FF(b, c, d, a, x[k+7], S14, 0xFD469501);
-    a = FF(a, b, c, d, x[k+8], S11, 0x698098D8); d = FF(d, a, b, c, x[k+9], S12, 0x8B44F7AF); c = FF(c, d, a, b, x[k+10], S13, 0xFFFF5BB1); b = FF(b, c, d, a, x[k+11], S14, 0x895CD7BE);
-    a = FF(a, b, c, d, x[k+12], S11, 0x6B901122); d = FF(d, a, b, c, x[k+13], S12, 0xFD987193); c = FF(c, d, a, b, x[k+14], S13, 0xA679438E); b = FF(b, c, d, a, x[k+15], S14, 0x49B40821);
-    a = GG(a, b, c, d, x[k+1], S21, 0xF61E2562); d = GG(d, a, b, c, x[k+6], S22, 0xC040B340); c = GG(c, d, a, b, x[k+11], S23, 0x265E5A51); b = GG(b, c, d, a, x[k+0], S24, 0xE9B6C7AA);
-    a = GG(a, b, c, d, x[k+5], S21, 0xD62F105D); d = GG(d, a, b, c, x[k+10], S22, 0x2441453); c = GG(c, d, a, b, x[k+15], S23, 0xD8A1E681); b = GG(b, c, d, a, x[k+4], S24, 0xE7D3FBC8);
-    a = GG(a, b, c, d, x[k+9], S21, 0x21E1CDE6); d = GG(d, a, b, c, x[k+14], S22, 0xC33707D6); c = GG(c, d, a, b, x[k+3], S23, 0xF4D50D87); b = GG(b, c, d, a, x[k+8], S24, 0x455A14ED);
-    a = GG(a, b, c, d, x[k+13], S21, 0xA9E3E905); d = GG(d, a, b, c, x[k+2], S22, 0xFCEFA3F8); c = GG(c, d, a, b, x[k+7], S23, 0x676F02D9); b = GG(b, c, d, a, x[k+12], S24, 0x8D2A4C8A);
-    a = HH(a, b, c, d, x[k+5], S31, 0xFFFA3942); d = HH(d, a, b, c, x[k+8], S32, 0x8771F681); c = HH(c, d, a, b, x[k+11], S33, 0x6D9D6122); b = HH(b, c, d, a, x[k+14], S34, 0xFDE5380C);
-    a = HH(a, b, c, d, x[k+1], S31, 0xA4BEEA44); d = HH(d, a, b, c, x[k+4], S32, 0x4BDECFA9); c = HH(c, d, a, b, x[k+7], S33, 0xF6BB4B60); b = HH(b, c, d, a, x[k+10], S34, 0xBEBFBC70);
-    a = HH(a, b, c, d, x[k+13], S31, 0x289B7EC6); d = HH(d, a, b, c, x[k+0], S32, 0xEAA127FA); c = HH(c, d, a, b, x[k+3], S33, 0xD4EF3085); b = HH(b, c, d, a, x[k+6], S34, 0x04881D05);
-    a = HH(a, b, c, d, x[k+9], S31, 0xD9D4D039); d = HH(d, a, b, c, x[k+12], S32, 0xE6DB99E5); c = HH(c, d, a, b, x[k+15], S33, 0x1FA27CF8); b = HH(b, c, d, a, x[k+2], S34, 0xC4AC5665);
-    a = II(a, b, c, d, x[k+0], S41, 0xF4292244); d = II(d, a, b, c, x[k+3], S42, 0x432AFF97); c = II(c, d, a, b, x[k+10], S43, 0xAB9423A7); b = II(b, c, d, a, x[k+1], S44, 0xFC93A039);
-    a = II(a, b, c, d, x[k+8], S41, 0x655B59C3); d = II(d, a, b, c, x[k+15], S42, 0x8F0CCC92); c = II(c, d, a, b, x[k+6], S43, 0xFFEFF47D); b = II(b, c, d, a, x[k+13], S44, 0x85845DD1);
-    a = II(a, b, c, d, x[k+4], S41, 0x6FA87E4F); d = II(d, a, b, c, x[k+11], S42, 0xFE2CE6E0); c = II(c, d, a, b, x[k+2], S43, 0xA3014314); b = II(b, c, d, a, x[k+9], S44, 0x4E0811A1);
-    a = addUnsigned(a, AA); b = addUnsigned(b, BB); c = addUnsigned(c, CC); d = addUnsigned(d, DD);
-  }
-  return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase();
-}
-
-// 补齐 5 大音乐平台注册
+// 1. 发送初始化成功通知
 send(EVENT_NAMES.inited, {
   status: true,
   openDevTools: false,
   sources: {
-    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
-    kg: { name: '酷狗音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
-    tx: { name: 'QQ音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
-    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] },
-    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k', 'flac'] }
+    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    kg: { name: '酷狗音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    tx: { name: 'QQ音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] }
   }
 });
 
+// 2. 监听请求并透传给后端 Worker
 on(EVENT_NAMES.request, async ({ action, source, musicInfo, quality }) => {
   if (action === 'musicUrl') {
-    const songId = musicInfo.songmid || musicInfo.hash || musicInfo.id;
-    const t = Math.floor(Date.now() / 1000);
-    const sign = md5(source + songId + quality + t + SECRET);
-
-    const apiUrl = WORKER_URL + '/?source=' + source + '&id=' + encodeURIComponent(songId) + '&quality=' + quality + '&t=' + t + '&sign=' + sign;
+    const songId = musicInfo.songmid || musicInfo.hash || musicInfo.id || musicInfo.copyrightId;
+    const apiUrl = WORKER_URL + '/parse?source=' + source + '&id=' + encodeURIComponent(songId) + '&quality=' + quality + '&secret=' + '""" + API_SECRET + """';
 
     try {
       const res = await request(apiUrl, { method: 'GET', timeout: 10000 });
       const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
-      if (body.code === 0 && body.url) return body.url;
-      throw new Error(body.msg || '获取播放地址失败');
+      if (body && body.code === 0 && body.url) {
+        return body.url;
+      }
+      throw new Error(body.msg || '无法获取播放链接');
     } catch (err) {
-      throw new Error('接口响应失败: ' + err.message);
+      throw new Error('解析失败: ' + err.message);
     }
   }
 });
@@ -156,90 +60,96 @@ export default {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': '*',
-      'Content-Type': 'application/javascript; charset=utf-8'
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
     };
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // 提供 JS 脚本服务
     if (url.pathname === '/lx-source.js') {
       return new Response(CLIENT_SCRIPT, {
         headers: { ...corsHeaders, 'Content-Type': 'application/javascript; charset=utf-8' }
       });
     }
 
-    const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' };
+    // 解析音源接口
+    if (url.pathname === '/parse') {
+      const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' };
 
-    const source = url.searchParams.get('source');
-    const songmid = url.searchParams.get('id');
-    const quality = url.searchParams.get('quality') || '128k';
-    const t = parseInt(url.searchParams.get('t') || '0', 10);
-    const sign = url.searchParams.get('sign');
+      const source = url.searchParams.get('source');
+      const songmid = url.searchParams.get('id');
+      const quality = url.searchParams.get('quality') || '128k';
+      const secret = url.searchParams.get('secret');
 
-    if (!source || !songmid || !t || !sign) {
-      return new Response(JSON.stringify({ code: 401, msg: 'Unauthorized Request' }), { status: 401, headers: jsonHeaders });
+      if (secret !== API_SECRET) {
+        return new Response(JSON.stringify({ code: 403, msg: '密钥不匹配，拒绝访问' }), { status: 403, headers: jsonHeaders });
+      }
+
+      if (!source || !songmid) {
+        return new Response(JSON.stringify({ code: 400, msg: '缺少必备参数' }), { status: 400, headers: jsonHeaders });
+      }
+
+      try {
+        const musicUrl = await getRealPlayUrl(source, songmid, quality);
+        return new Response(JSON.stringify({ code: 0, url: musicUrl }), { headers: jsonHeaders });
+      } catch (err) {
+        return new Response(JSON.stringify({ code: 500, msg: err.message }), { status: 500, headers: jsonHeaders });
+      }
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - t) > 60) {
-      return new Response(JSON.stringify({ code: 403, msg: 'Link expired' }), { status: 403, headers: jsonHeaders });
-    }
-
-    const expectedSign = await md5WebCrypto(source + songmid + quality + t + API_SECRET);
-    if (sign !== expectedSign) {
-      return new Response(JSON.stringify({ code: 403, msg: 'Invalid Signature' }), { status: 403, headers: jsonHeaders });
-    }
-
-    try {
-      let musicUrl = await parseMusicUrl(source, songmid, quality);
-      return new Response(JSON.stringify({ code: 0, url: musicUrl }), { headers: jsonHeaders });
-    } catch (err) {
-      return new Response(JSON.stringify({ code: 500, msg: err.message }), { status: 500, headers: jsonHeaders });
-    }
+    return new Response('MusicDL Worker Active', { status: 200, headers: corsHeaders });
   }
 };
 
-async function md5WebCrypto(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('MD5', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// 多通路智能解析，保障 100% 播放成功率
-async function parseMusicUrl(source, id, quality) {
+// 后端多重备用链接智能解析引擎
+async function getRealPlayUrl(source, id, quality) {
+  // 渠道 1：免费公用解析 API
   try {
-    if (source === 'kw') {
-      const res = await fetch(`https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${id}&format=mp3&response=url`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-      });
-      const text = await res.text();
-      if (text && text.startsWith('http')) return text;
-    } else if (source === 'wy') {
-      const res = await fetch(`https://music.163.com/api/song/enhance/player/url?ids=[${id}]&br=320000`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://music.163.com/' }
-      });
-      const data = await res.json();
-      if (data?.data?.[0]?.url) return data.data[0].url.replace('http://', 'https://');
-    } else if (source === 'mg') {
+    const res = await fetch(`https://api.vkey.lgqy.hn.cn/api/music?source=${source}&id=${id}&quality=${quality}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+    const data = await res.json();
+    if (data && data.url && data.url.startsWith('http')) {
+      return data.url;
+    }
+  } catch (e) {}
+
+  // 渠道 2：咪咕直连接口
+  if (source === 'mg') {
+    try {
       const res = await fetch(`https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=${id}&contenttype=1`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)', 'channel': '0146951' }
       });
       const data = await res.json();
       if (data?.info?.url) return data.info.url;
-    }
-
-    // 备用高兼容解析节点（防版权限制）
-    const fallbackRes = await fetch(`https://api.vkey.lgqy.hn.cn/api/music?source=${source}&id=${id}&quality=${quality}`);
-    const fallbackData = await fallbackRes.json();
-    if (fallbackData?.url) return fallbackData.url;
-  } catch (e) {
-    console.error("解析异常:", e);
+    } catch (e) {}
   }
 
-  throw new Error('当前资源暂时无法解析或已被版商屏蔽');
+  // 渠道 3：酷我直连接口
+  if (source === 'kw') {
+    try {
+      const res = await fetch(`https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${id}&format=mp3&response=url`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
+      const text = await res.text();
+      if (text && text.startsWith('http')) return text;
+    } catch (e) {}
+  }
+
+  // 渠道 4：网易云直连接口
+  if (source === 'wy') {
+    try {
+      const res = await fetch(`https://music.163.com/api/song/enhance/player/url?ids=[${id}]&br=320000`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://music.163.com/' }
+      });
+      const data = await res.json();
+      if (data?.data?.[0]?.url) return data.data[0].url.replace('http://', 'https://');
+    } catch (e) {}
+  }
+
+  throw new Error('所有线路解析失败，该歌曲可能受版权保护');
 }
 """
 

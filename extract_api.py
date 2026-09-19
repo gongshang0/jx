@@ -4,7 +4,7 @@ def build_all():
     print(">>> 正在生成配置与部署文件...")
 
     # ⚠️ 请修改为你自己的自定义 API 域名
-    CUSTOM_API_DOMAIN = "https://lx-api.gongshangss.dpdns.org"
+    CUSTOM_API_DOMAIN = "https://lx-music-api.gongshang13.workers.dev"
 
     # 1. 生成部署在 Cloudflare Worker 的后端 API 逻辑
     worker_code = """export default {

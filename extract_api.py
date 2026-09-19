@@ -116,12 +116,22 @@ function md5(string) {
   return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase();
 }
 
-// 客户端加载时直接发起请求响应
+// 核心：向洛雪音乐发送初始化成功通知，解除“初始化中”状态
+send(EVENT_NAMES.inited, {
+  status: true,
+  openDevTools: false,
+  sources: {
+    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] }
+  }
+});
+
+// 处理播放音乐 URL 解析请求
 on(EVENT_NAMES.request, async ({ action, source, musicInfo, quality }) => {
   if (action === 'musicUrl') {
     const songId = musicInfo.songmid || musicInfo.id;
     const t = Math.floor(Date.now() / 1000);
-    // 签名: md5(source + id + quality + time + SECRET)
     const sign = md5(source + songId + quality + t + SECRET);
 
     const apiUrl = WORKER_URL + '/?source=' + source + '&id=' + songId + '&quality=' + quality + '&t=' + t + '&sign=' + sign;

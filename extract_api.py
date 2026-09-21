@@ -12,8 +12,8 @@ const API_SECRET = '""" + API_SECRET + """';
 
 const CLIENT_SCRIPT = `/**
  * @name MusicDL 核心提取源
- * @description 基于 musicdl 算法移植 (全平台直连版)
- * @version 1.6.0
+ * @description 基于 musicdl 接口增强移植版
+ * @version 1.7.0
  */
 
 const { EVENT_NAMES, request, on, send } = globalThis.lx;
@@ -100,61 +100,75 @@ export default {
   }
 };
 
-// 移植 musicdl 核心解析接口
+// 移植并增强 musicdl 核心解析接口
 async function parseMusicDL(source, songid) {
-  // 1. 酷我音乐 (musicdl/modules/sources/kw.py 逻辑移植)
-  if (source === 'kw') {
-    const targetUrl = `https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${songid}&format=mp3&response=url`;
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'http://www.kuwo.cn/'
-      }
-    });
-    const urlText = await res.text();
-    if (urlText && urlText.startsWith('http')) return urlText;
-  }
-
-  // 2. 网易云音乐 (musicdl/modules/sources/netease.py 逻辑移植)
+  // 1. 网易云音乐 (强化网页版 API 伪装)
   if (source === 'wy') {
-    const targetUrl = `https://music.163.com/api/song/enhance/player/url?ids=[${songid}]&br=320000`;
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Referer': 'https://music.163.com/',
-        'Cookie': 'os=pc; osver=Microsoft-Windows-10-Professional-build-19042-64bit; appver=2.0.3.131777'
+    try {
+      const res = await fetch(`https://music.163.com/api/song/enhance/player/url?ids=[${songid}]&br=320000`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://music.163.com/',
+          'Cookie': 'NID=511=; __remember_me=true; os=pc; osver=Microsoft-Windows-10-Professional-build-19042-64bit; appver=2.0.3.131777;'
+        }
+      });
+      const data = await res.json();
+      if (data?.data?.[0]?.url) {
+        return data.data[0].url.replace('http://', 'https://');
       }
-    });
-    const data = await res.json();
-    if (data?.data?.[0]?.url) {
-      return data.data[0].url.replace('http://', 'https://');
-    }
+    } catch(e) {}
   }
 
-  // 3. 酷狗音乐 (musicdl/modules/sources/kugou.py 逻辑移植)
+  // 2. 酷我音乐 (官方反劫持接口)
+  if (source === 'kw') {
+    try {
+      const res = await fetch(`https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${songid}&format=mp3&response=url`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'http://www.kuwo.cn/'
+        }
+      });
+      const urlText = await res.text();
+      if (urlText && urlText.startsWith('http')) return urlText;
+    } catch(e) {}
+  }
+
+  // 3. 酷狗音乐 (移动端 H5 接口)
   if (source === 'kg') {
-    const targetUrl = `https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=${songid}`;
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
-      }
-    });
-    const data = await res.json();
-    if (data && data.url) return data.url;
+    try {
+      const res = await fetch(`https://m.kugou.com/app/i/getSongInfo.php?cmd=playInfo&hash=${songid}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+        }
+      });
+      const data = await res.json();
+      if (data?.url) return data.url;
+    } catch(e) {}
   }
 
-  // 4. 咪咕音乐 (musicdl/modules/sources/migu.py 逻辑移植)
+  // 4. 咪咕音乐 (移动分享接口)
   if (source === 'mg') {
-    const targetUrl = `https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=${songid}&contenttype=1`;
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
-        'channel': '0146951'
-      }
-    });
-    const data = await res.json();
-    if (data?.info?.url) return data.info.url;
+    try {
+      const res = await fetch(`https://c.musicquery.migu.cn/v1.0/content/share_new.do?contentId=${songid}&contenttype=1`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+          'channel': '0146951'
+        }
+      });
+      const data = await res.json();
+      if (data?.info?.url) return data.info.url;
+    } catch(e) {}
   }
+
+  // 备用兜底策略：如果官方接口拒绝 Cloudflare IP，自动启用聚合源回退
+  try {
+    const fallbackRes = await fetch(`https://api.ikunshare.com/api/music?source=${source}&id=${songid}&quality=128k`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+    const fallbackData = await fallbackRes.json();
+    if (fallbackData?.url && fallbackData.url.startsWith('http')) return fallbackData.url;
+    if (fallbackData?.data && typeof fallbackData.data === 'string' && fallbackData.data.startsWith('http')) return fallbackData.data;
+  } catch(e) {}
 
   return '';
 }

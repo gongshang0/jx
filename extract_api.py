@@ -3,7 +3,7 @@ import os
 def build_all():
     print(">>> 正在生成对接 Go Music DL 后端的 Worker 部署文件...")
 
-    CUSTOM_API_DOMAIN = "https://lx.gongshangss.dpdns.org"
+    CUSTOM_API_DOMAIN = "https://lx-music-api-server--gongshang.replit.appg"
     # 使用该 Go 项目的 API 节点
     GO_API_BASE = "https://music.zkkp.nyc.mn"
 
